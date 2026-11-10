@@ -1,0 +1,156 @@
+rules_version = '2';
+
+// Campus Incident Reporting - Firestore Security Rules
+//
+// Paste into Firebase Console -> Firestore Database -> Rules, or deploy with
+//   firebase deploy --only firestore:rules
+//
+// The app validates everything on the client too, but these rules are the real
+// guard: a user calling the Firestore API directly is held to the same limits.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- helpers -----------------------------------------------------------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Only ALU institutional accounts may use the app (mirrors
+    // AuthConstants.allowedEmailDomains in the Flutter code).
+    function hasAluEmail() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.lower().matches('.*@(alustudent|alueducation|aluedu)[.]com$');
+    }
+
+    // Staff domain (mirrors AuthConstants.staffEmailDomain). These accounts
+    // are created as staff and do not have to verify their email.
+    function isStaffDomain() {
+      return hasAluEmail()
+        && request.auth.token.email.lower().matches('.*@aluedu[.]com$');
+    }
+
+    // A signed-in ALU account allowed into the app: email verified, or a
+    // staff-domain account (which skips verification).
+    function isVerified() {
+      return hasAluEmail()
+        && (request.auth.token.email_verified == true || isStaffDomain());
+    }
+
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isStaff() {
+      return isVerified() && role() == 'staff';
+    }
+
+    function isOwner(data) {
+      return data.reportedByUid == request.auth.uid;
+    }
+
+    // Shape and size limits for the user-editable incident fields. Mirrors the
+    // validators on the report form.
+    function hasValidContent(data) {
+      return data.title is string
+        && data.title.size() >= 5 && data.title.size() <= 100
+        && data.description is string
+        && data.description.size() >= 15 && data.description.size() <= 1000
+        && data.category in ['Facilities', 'Water', 'Electricity', 'Safety', 'Sanitation']
+        && data.location is string
+        && data.location.size() > 0 && data.location.size() <= 100;
+    }
+
+    // ---- users -------------------------------------------------------------
+
+    match /users/{uid} {
+      // A user may only read their own profile.
+      allow read: if isSignedIn() && request.auth.uid == uid;
+
+      // Written during registration, which happens before the email is verified,
+      // so this rule checks the ALU domain rather than verification. Student
+      // domains can only self-assign "student"; only @aluedu.com accounts may
+      // be created as "staff".
+      allow create: if hasAluEmail()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && (request.resource.data.role == 'student'
+            || (request.resource.data.role == 'staff' && isStaffDomain()));
+
+      // Profile edits are allowed (department, location...) but the role and
+      // email can never be changed by the owner.
+      allow update: if hasAluEmail()
+        && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.email == resource.data.email;
+
+      allow delete: if false;
+    }
+
+    // ---- incidents ---------------------------------------------------------
+
+    match /incidents/{incidentId} {
+      // Any verified ALU user can browse reports.
+      allow read: if isVerified();
+
+      // A user may only report as themselves, and a new report must start as
+      // "Submitted" with valid content.
+      allow create: if isVerified()
+        && isOwner(request.resource.data)
+        && request.resource.data.status == 'Submitted'
+        && request.resource.data.id == incidentId
+        && hasValidContent(request.resource.data)
+        && request.resource.data.get('isAnonymous', false) is bool
+        && request.resource.data.get('hasPhoto', false) is bool;
+
+      // Staff move a report through its lifecycle; only the status fields may
+      // change.
+      allow update: if isStaff()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'updatedAt', 'statusHistory'])
+        && request.resource.data.status in ['Submitted', 'In Progress', 'Resolved'];
+
+      // The reporter may correct their own report while it is still
+      // "Submitted" (staff have not started on it yet). Only the content fields
+      // may change.
+      allow update: if isVerified()
+        && isOwner(resource.data)
+        && resource.data.status == 'Submitted'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['title', 'description', 'category', 'location', 'updatedAt'])
+        && hasValidContent(request.resource.data);
+
+      // A student may withdraw their own report while it is still Submitted.
+      allow delete: if isVerified()
+        && isOwner(resource.data)
+        && resource.data.status == 'Submitted';
+    }
+
+    // ---- incident photos ---------------------------------------------------
+    //
+    // Compressed JPEG bytes stored in Firestore instead of Cloud Storage, so
+    // the project runs on the free Spark plan. The document id is the
+    // incident id; it is written in the same batch as the incident.
+
+    match /incident_photos/{incidentId} {
+      allow read: if isVerified();
+
+      // Only the reporter, only for their own new report, only once, and at
+      // most ~700 KB (Firestore documents are capped at 1 MiB).
+      allow create: if isVerified()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.data is bytes
+        && request.resource.data.data.size() <= 700 * 1024
+        && getAfter(/databases/$(database)/documents/incidents/$(incidentId))
+             .data.reportedByUid == request.auth.uid;
+
+      // Photos are fixed once submitted.
+      allow update: if false;
+
+      // Removed together with the report, under the same conditions.
+      allow delete: if isVerified()
+        && resource.data.ownerUid == request.auth.uid;
+    }
+  }
+}
