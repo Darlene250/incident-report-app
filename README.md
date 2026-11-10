@@ -11,7 +11,7 @@ The full technical write-up is in [docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPO
 | Area | What it does |
 |------|--------------|
 | Authentication | Register, sign in, sign out, forgot password, session restore. Only `@alustudent.com`, `@alueducation.com` and `@aluedu.com` emails are accepted. Student domains must verify their email before the app opens; `@aluedu.com` accounts are created as staff and skip verification. |
-| Reporting | Category, title, description, campus location, optional photo (compressed on the device and stored in Firestore) and an option to report anonymously. |
+| Reporting | Category, title, description, campus location, optional photo from the camera or gallery (compressed on the device and stored in Firestore) and an option to report anonymously. |
 | Browsing | All reports with live search plus status and category filters. |
 | Details | Summary, photo, status timeline with timestamps, reporter (or "Reported anonymously"). |
 | Student actions | Edit or delete their own report while it is still *Submitted*. |
@@ -36,8 +36,20 @@ UI → Provider → Service → Firebase. Screens never call Firebase directly.
 ```shell
 flutter pub get
 flutter run            # pick an Android/iOS device or Chrome
-flutter test           # 101 unit and widget tests
+flutter test           # 102 unit and widget tests
 flutter analyze
+```
+
+### Security rules tests
+
+`rules_test/` runs 48 checks of `firestore.rules` against the local Firestore
+emulator (needs the Firebase CLI, Node and Java; it never touches the live
+project):
+
+```shell
+cd rules_test
+npm install
+npm test
 ```
 
 ## Firebase setup

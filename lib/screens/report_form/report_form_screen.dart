@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show PathMetric;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -81,12 +82,41 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     return null;
   }
 
-  Future<void> _pickPhoto() async {
+  /// On phones the user picks camera or gallery; the web has no camera choice,
+  /// so it opens the file picker directly.
+  Future<void> _choosePhotoSource() async {
+    if (kIsWeb) return _pickPhoto(ImageSource.gallery);
+
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source != null) await _pickPhoto(source);
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
     try {
       // Resized and re-encoded on the device so the photo fits comfortably in
       // a Firestore document (typically 100–300 KB).
       final XFile? picked = await _picker.pickImage(
-        source: ImageSource.gallery,
+        source: source,
         maxWidth: 1024,
         maxHeight: 1024,
         imageQuality: 70,
@@ -103,7 +133,13 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('We could not open your gallery. Please try again.')),
+        SnackBar(
+          content: Text(
+            source == ImageSource.camera
+                ? 'We could not open the camera. Please try again.'
+                : 'We could not open your gallery. Please try again.',
+          ),
+        ),
       );
     }
   }
@@ -259,7 +295,7 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
                   Text('Add a photo (optional)', style: AppTextStyles.inputLabel),
                   const SizedBox(height: 10),
                   if (_photoBytes == null)
-                    _PhotoPickerBox(onTap: isSubmitting ? null : _pickPhoto)
+                    _PhotoPickerBox(onTap: isSubmitting ? null : _choosePhotoSource)
                   else
                     _PhotoPreview(bytes: _photoBytes!, onRemove: _removePhoto),
                   const SizedBox(height: 12),
@@ -420,7 +456,7 @@ class _PhotoPickerBox extends StatelessWidget {
                   const Icon(Icons.image_outlined, size: 24, color: AppColors.primary),
                   const SizedBox(height: 6),
                   Text(
-                    'Tap to add photos',
+                    'Tap to add a photo',
                     style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                   ),
                 ],

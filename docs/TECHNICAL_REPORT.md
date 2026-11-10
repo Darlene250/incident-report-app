@@ -299,7 +299,7 @@ The **rules are the real enforcement**. The UI checks are only for usability.
 
 ## 7. Testing
 
-`flutter test` runs **101 automated tests**. All pass, and `flutter analyze`
+`flutter test` runs **102 automated tests**. All pass, and `flutter analyze`
 reports no issues.
 
 | File | Tests | Covers |
@@ -307,7 +307,7 @@ reports no issues.
 | `models_test.dart` | 16 | `fromMap`/`toMap` round trips, defaults for missing fields, enum parsing |
 | `incident_provider_test.dart` | 21 | live streams, search/filters, counters, submit with/without photo, oversized photo rejected, photo caching, staff-only status update, edit/delete ownership rules, anonymous reports |
 | `auth_test.dart` | 11 | ALU and staff domain checks, validators, Firebase error → friendly message, provider rejects non-ALU email |
-| `report_form_test.dart` | 8 | required fields, min lengths, submit + success, data kept on failure, double-tap protection |
+| `report_form_test.dart` | 9 | camera or gallery choice, required fields, min lengths, submit + success, data kept on failure, double-tap protection |
 | `report_edit_test.dart` | 1 | edit mode pre-fills and saves |
 | `reports_screen_test.dart` | 9 | search and filter chips, empty/loading/error states |
 | `incident_details_test.dart` | 6 | timeline, staff-only controls, delete flow |
@@ -319,6 +319,14 @@ reports no issues.
 `FakeIncidentService` and `FakeAuthService`
 (`test/helpers/fakes.dart`) driven by `StreamController`s. This tests real
 provider logic and real widgets without a network.
+
+**Security rules tests.** `rules_test/rules.test.mjs` runs **48 checks** of
+`firestore.rules` against the Firestore emulator with
+`@firebase/rules-unit-testing`, all passing. They cover the ALU domain check
+(including a lookalike `aluedu.com.evil.com`), verification, students being
+unable to make themselves staff, report validation, owner-only edit and
+delete while *Submitted*, staff-only status changes, the 700 KB photo limit
+and atomic report + photo batches. Run with `cd rules_test && npm test`.
 
 **Manual testing.** [TODO] Briefly describe what you tested on a real device
 and in the Firebase Console. For example: registering with a Gmail address is
@@ -364,8 +372,7 @@ Firestore, read as bytes so it works on web and mobile); keeping several screens
   submission.
 - All reports are loaded in one stream. At a much larger scale this would need
   pagination or per-campus queries.
-- Security rules are not covered by automated tests (Firebase Emulator tests
-  would be the next step).
+- The rules tests run locally; they are not yet in a CI pipeline.
 
 ### Lessons learned
 [TODO] In your own words.

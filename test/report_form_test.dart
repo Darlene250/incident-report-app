@@ -80,8 +80,18 @@ void main() {
     ]);
     expect(find.text('Select a category'), findsOneWidget);
     expect(find.text('Add a photo (optional)'), findsOneWidget);
-    expect(find.text('Tap to add photos'), findsOneWidget);
+    expect(find.text('Tap to add a photo'), findsOneWidget);
     expect(find.text('Submit Report'), findsOneWidget);
+  });
+
+  testWidgets('photo box offers camera and gallery on phones', (WidgetTester tester) async {
+    await pumpForm(tester);
+
+    await tester.tap(find.text('Tap to add a photo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Take a photo'), findsOneWidget);
+    expect(find.text('Choose from gallery'), findsOneWidget);
   });
 
   testWidgets('validates every required field inline', (WidgetTester tester) async {
