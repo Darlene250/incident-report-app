@@ -328,10 +328,19 @@ unable to make themselves staff, report validation, owner-only edit and
 delete while *Submitted*, staff-only status changes, the 700 KB photo limit
 and atomic report + photo batches. Run with `cd rules_test && npm test`.
 
-**Manual testing.** [TODO] Briefly describe what you tested on a real device
-and in the Firebase Console. For example: registering with a Gmail address is
-rejected; a student on one phone sees the status change made by a staff
-account on another; a rules violation shows a permission error.
+**End-to-end testing.** The production web build (built with
+`--dart-define=USE_EMULATORS=true`) was run against the Auth and Firestore
+emulators and driven through the real UI in Chrome with a staff and two
+student accounts. All of these passed: Gmail rejected; `@aluedu.com` staff
+straight in; student verification gate; empty-form validation; report with
+photo; anonymous report; search and filters; student edit and delete; staff
+status change shown live on the student's screen in about 1.2 s; wrong
+password; forgot password; sign-out, sign-in and session kept after reload.
+
+This testing found one real bug: after verifying, a student was let in but
+every Firestore read was refused. `user.reload()` does not refresh the cached
+ID token, which still said `email_verified: false`. The app now forces a token
+refresh when the account is verified but the token is not.
 
 ---
 

@@ -75,6 +75,13 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
 
+    // Covers reopening the app after verifying in another window: the
+    // cached token may still say "unverified".
+    try {
+      await _authService.refreshTokenIfStale(user);
+    } catch (_) {
+      // Offline: carry on; the profile load reports any real problem.
+    }
     await _loadProfile(user.uid);
   }
 

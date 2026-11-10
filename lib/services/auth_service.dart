@@ -83,8 +83,24 @@ class AuthService {
     if (user == null) return false;
 
     await user.reload();
+    final User? reloaded = _auth.currentUser;
+    if (reloaded == null || !reloaded.emailVerified) return false;
 
-    return _auth.currentUser?.emailVerified ?? false;
+    await refreshTokenIfStale(reloaded);
+    return true;
+  }
+
+  /// `reload()` updates the user object but not the cached ID token, and the
+  /// security rules read `email_verified` from that token. Without a refresh,
+  /// a student who has just verified is still refused by Firestore for up to
+  /// an hour. Forces a new token only when the cached one is out of date.
+  Future<void> refreshTokenIfStale(User user) async {
+    if (!user.emailVerified) return;
+
+    final IdTokenResult token = await user.getIdTokenResult();
+    if (token.claims?['email_verified'] != true) {
+      await user.getIdToken(true);
+    }
   }
 
   /// Sends Firebase's password reset link to [email].

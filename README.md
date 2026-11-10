@@ -40,6 +40,16 @@ flutter test           # 102 unit and widget tests
 flutter analyze
 ```
 
+### Running against local emulators
+
+To try the app without touching the live project, start the emulators and
+run the app in emulator mode:
+
+```shell
+firebase emulators:start --only auth,firestore
+flutter run -d chrome --dart-define=USE_EMULATORS=true
+```
+
 ### Security rules tests
 
 `rules_test/` runs 48 checks of `firestore.rules` against the local Firestore
